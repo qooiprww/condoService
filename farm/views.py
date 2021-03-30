@@ -3,6 +3,7 @@ from django.shortcuts import render
 from django.http.response import JsonResponse
 from rest_framework.parsers import JSONParser
 from rest_framework import status
+from rest_framework.decorators import api_view
 
 from taskEngine.tasks import offerTask
 
@@ -25,7 +26,6 @@ from farm.farmSerializer import PlantTypeSerializer
 from farm.models import Plant
 from farm.farmSerializer import PlantSerializer
 
-from rest_framework.decorators import api_view
 
 #
 # task
@@ -145,23 +145,22 @@ def seed_container_detail(request, pk):
     elif request.method == 'PUT':
         seed_container_data = JSONParser().parse(request)
         seed_container_serializer = SeedContainerSerializer(
-            farm, data=seed_container_data)
+            seed_container, data=seed_container_data)
         if seed_container_serializer.is_valid():
             seed_container_serializer.save()
             return JsonResponse(seed_container_serializer.data)
         return JsonResponse(seed_container_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     elif request.method == 'DELETE':
-        farm.delete()
+        seed_container.delete()
         return JsonResponse({'message': 'seed_container was deleted successfully!'}, status=status.HTTP_204_NO_CONTENT)
 
 
-@api_view(['GET'])
-def seed_container_list_published(request):
-    # GET all published seed_containers
-    seed_container = SeedContainer.objects.filter(published=True)
-
-    if request.method == 'GET':
+@api_view(['POST'])
+def seed_container_list_name(request):
+    # GET all published seed_containers    
+    seed_container = SeedContainer.objects.filter(seed_container_name__icontains=JSONParser().parse(request)['seed_container_name'])
+    if request.method == 'POST':
         seed_container_serializer = SeedContainerSerializer(
             seed_container, many=True)
         return JsonResponse(seed_container_serializer.data, safe=False)
@@ -295,13 +294,13 @@ def ambient_data_detail(request, pk):
 
 
 @api_view(['GET'])
-def ambient_data_list_published(request):
+def ambient_data_latest(request):
     # GET all published ambient_datas
-    ambient_data = AmbientData.objects.filter(published=True)
+    ambient_data = AmbientData.objects.latest('ambient_data_date_time')
 
     if request.method == 'GET':
         ambient_data_serializer = AmbientDataSerializer(
-            ambient_data, many=True)
+            [ambient_data], many=True)
         return JsonResponse(ambient_data_serializer.data, safe=False)
 
 #

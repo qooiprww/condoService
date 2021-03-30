@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'farm.apps.FarmConfig',
+    'taskEngine.apps.TaskengineConfig',
     # Django REST framework
     'rest_framework',
     # CORS
@@ -196,6 +197,6 @@ TASK_STATUS_CHOICES = [
 
 MAX_LEVEL = 1
 WATERING_TASK_THRESHOLD = 10
-MAX_RADIUS = 50.0
+MAX_RADIUS = 32.0
 # run every DATA_GATHERING_TASK_FREQUENCY hours
 DATA_GATHERING_TASK_FREQUENCY = '1'

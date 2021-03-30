@@ -1,6 +1,7 @@
 from farm.models import Plant
 from farm.models import Task
 from farm.models import PlantData
+from farm.models import PlantType
 from farm.models import AmbientData
 from django.conf import settings
 from datetime import datetime
@@ -35,12 +36,15 @@ def offerTask(task_serializer):
         taskQueue.append(task_serializer.data['id'])
         taskHandler()
     else:
-        taskQueue.append(task_serializer.data['id'])
+        if task_serializer.data['task_type'] == settings.TASK_MANUAL_CONTROL:
+            taskQueue.insert(1, task_serializer.data['id'])
+        else:
+            taskQueue.append(task_serializer.data['id'])
 
 
 def taskHandler():
 
-    task = Task.objects.get(id=taskQueue[-1])
+    task = Task.objects.get(id=taskQueue[0])
     task.task_status = settings.TASK_STATUS_EXECUTING
     task.save()
 
@@ -72,7 +76,7 @@ def taskHandler():
 
     elif task.task_type == settings.TASK_LIGHTING_CONTROL:
         plant = Plant.objects.get(id=task.plant_id)
-        plant_type = Plant.objects.get(id=plant.plant_type_id)
+        plant_type = PlantType.objects.get(id=plant.plant_type_id)
         lightingControlTask(
             task, plant_type.desired_light_red, plant_type.desired_light_green, plant_type.desired_light_blue)
 
@@ -90,7 +94,6 @@ def wateringTask(task, degree, radius, level, desired_humidity):
                                           'level': level,
                                           'target_humidity': desired_humidity}))
 
-    client.subscribe('response')
 
 
 def seedingTask(task, degree, radius, level, seed_container_degree, seed_container_radius, seed_container_level):
@@ -104,7 +107,6 @@ def seedingTask(task, degree, radius, level, seed_container_degree, seed_contain
                                           'seed_container_radius': seed_container_radius,
                                           'seed_container_level': seed_container_level}))
 
-    client.subscribe('response')
 
 
 def plantDataGatheringTask(task, degree, radius, level):
@@ -115,16 +117,12 @@ def plantDataGatheringTask(task, degree, radius, level):
                                           'radius': radius,
                                           'level': level}))
 
-    client.subscribe('response')
 
 
 def ambientDataGatheringTask(task):
 
     client.publish('request', json.dumps({'task_id': task.id,
                                           'task_type': task.task_type}))
-
-    client.subscribe('response')
-
 
 def manualControlTask(task, degree, radius, level):
 
@@ -134,7 +132,6 @@ def manualControlTask(task, degree, radius, level):
                                           'radius': radius,
                                           'level': level}))
 
-    client.subscribe('response')
 
 
 def lightingControlTask(task, desired_light_red, desired_light_green, desired_light_blue):
@@ -145,22 +142,20 @@ def lightingControlTask(task, desired_light_red, desired_light_green, desired_li
                                           'desired_light_green': desired_light_green,
                                           'desired_light_blue': desired_light_blue}))
 
-    client.subscribe('response')
 
 # The callback for when a PUBLISH message is received from the server.
 
 
 def handleResponse(client, userdata, msg):
     print("Received message: " + msg.topic +
-          " -> " + msg.payload.decode("utf-8"))
-    client.unsubscribe('response')
+          " -> " + msg.payload.decode('utf-8'))
 
-    task_id = taskQueue[-1]
+    task_id = taskQueue[0]
     task = Task.objects.get(id=task_id)
-    data = json.loads(msg.payload.decode("utf-8"))
+    data = json.loads(msg.payload.decode('utf-8'))
 
     if task.task_type == settings.TASK_WATERING:
-        if int(data.task_id) == task_id and data.succeeded == True:
+        if data['task_id'] == task_id and data['succeeded'] == True:
             task.task_status = settings.TASK_STATUS_FINISHED
             task.save()
         else:
@@ -168,22 +163,25 @@ def handleResponse(client, userdata, msg):
             task.save()
 
     elif task.task_type == settings.TASK_SEEDING:
-        if int(data.task_id) == task_id and data.succeeded == True:
+        if data['task_id'] == task_id and data['succeeded'] == True:
             task.task_status = settings.TASK_STATUS_FINISHED
             task.save()
+            plant = Plant.objects.get(id=task.plant_id)
+            plant.planted = True
+            plant.save()
         else:
             task.task_status = settings.TASK_STATUS_FAILED
             task.save()
 
     elif task.task_type == settings.TASK_PLANT_DATA_GATHERING:
-        if int(data.task_id) == task_id and data.succeeded == True:
-            task.task_status = settings.TASK_STATUS_FAILED
+        if data['task_id'] == task_id and data['succeeded'] == True:
+            task.task_status = settings.TASK_STATUS_FINISHED
             task.save()
             PlantData.objects.create(
-                plant=task.plant_id, humidity=float(data.humidity))
+                plant=task.plant_id, humidity=data['humidity'])
             plant = Plant.objects.get(id=task.plant_id)
             plant_type = Plant.objects.get(id=plant.plant_type_id)
-            if float(data.humidity) + settings.WATERING_TASK_THRESHOLD < plant_type.desired_humidity:
+            if data['humidity'] + settings.WATERING_TASK_THRESHOLD < plant_type.desired_humidity:
                 task_serializer = PlantDataSerializer(
                     data={'plant_id': plant.id, 'task_type': settings.TASK_WATERING, 'task_status': settings.TASK_STATUS_QUEUED})
                 offerTask(task_serializer)
@@ -192,17 +190,18 @@ def handleResponse(client, userdata, msg):
             task.save()
 
     elif task.task_type == settings.TASK_AMBIENT_DATA_GATHERING:
-        if int(data.task_id) == task_id and data.succeeded == True:
-            task.task_status = settings.TASK_STATUS_FAILED
+        if data['task_id'] == task_id and data['succeeded'] == True:
+            task.task_status = settings.TASK_STATUS_FINISHED
             task.save()
-            AmbientData.objects.create(ambient_humidity=float(data.ambient_humidity),
-                                       ambient_light_intensity=float(data.ambient_light_intensity), ambient_temperature=float(data.ambient_temperature))
+            AmbientData.objects.create(ambient_humidity=data['ambient_humidity'],
+                                       ambient_light_intensity=data['ambient_light_intensity'], ambient_temperature=data['ambient_temperature'])
+            print("created data")
         else:
             task.task_status = settings.TASK_STATUS_FAILED
             task.save()
 
     elif task.task_type == settings.TASK_MANUAL_CONTROL:
-        if int(data.task_id) == task_id and data.succeeded == True:
+        if data['task_id'] == task_id and data['succeeded'] == True:
             task.task_status = settings.TASK_STATUS_FINISHED
             task.save()
         else:
@@ -210,7 +209,7 @@ def handleResponse(client, userdata, msg):
             task.save()
 
     elif task.task_type == settings.TASK_LIGHTING_CONTROL:
-        if int(data.task_id) == task_id and data.succeeded == True:
+        if data['task_id'] == task_id and data['succeeded'] == True:
             task.task_status = settings.TASK_STATUS_FINISHED
             task.save()
         else:
@@ -244,4 +243,8 @@ client.tls_set(tls_version=mqtt.ssl.PROTOCOL_TLS)
 client.username_pw_set(settings.HIVEMQ_USERNAME, settings.HIVEMQ_PASSWORD)
 
 # connect to HiveMQ Cloud on port 8883
+
 client.connect("84da454f982d4061a3e9339908532687.s1.eu.hivemq.cloud", 8883)
+client.subscribe('response')
+
+client.loop_start()

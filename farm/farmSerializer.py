@@ -11,6 +11,7 @@ class SeedContainerSerializer(serializers.ModelSerializer):
     class Meta:
         model = SeedContainer
         fields = ('id',
+        'seed_container_name',
                   'seed_container_degree',
                   'seed_container_radius',
                   'seed_container_level')

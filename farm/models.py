@@ -56,6 +56,7 @@ def validate_level(value):
 
 
 class SeedContainer(models.Model):
+    seed_container_name = models.CharField(blank=False, max_length=255, default="Seed Container")
     seed_container_degree = models.FloatField(
         blank=False, validators=[validate_degree])
     seed_container_radius = models.FloatField(
