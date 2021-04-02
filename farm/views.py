@@ -222,14 +222,22 @@ def plant_data_detail(request, pk):
         plant_data.delete()
         return JsonResponse({'message': 'plant_data was deleted successfully!'}, status=status.HTTP_204_NO_CONTENT)
 
-
 @api_view(['GET'])
-def plant_data_list_published(request):
+def plant_data_list_plant(request,pk):
     # GET all published plant_datas
-    plant_data = PlantData.objects.filter(published=True)
+    plant_data = PlantData.objects.filter(plant=pk)
 
     if request.method == 'GET':
         plant_data_serializer = PlantDataSerializer(plant_data, many=True)
+        return JsonResponse(plant_data_serializer.data, safe=False)
+
+@api_view(['GET'])
+def plant_data_list_plant_latest(request,pk):
+    # GET all published plant_datas
+    plant_data = PlantData.objects.filter(plant=pk).latest('plant_data_date_time')
+
+    if request.method == 'GET':
+        plant_data_serializer = PlantDataSerializer([plant_data], many=True)
         return JsonResponse(plant_data_serializer.data, safe=False)
 
 #
@@ -312,7 +320,7 @@ def ambient_data_latest(request):
 def plant_type_list(request):
     # GET list of plant_types, POST a new plant_type, DELETE all plant_types
     if request.method == 'GET':
-        plant_type = AmbientData.objects.all()
+        plant_type = PlantType.objects.all()
 
         plant_type_id = request.GET.get('id', None)
         if plant_type_id is not None:
@@ -362,13 +370,13 @@ def plant_type_detail(request, pk):
         return JsonResponse({'message': 'plant_type was deleted successfully!'}, status=status.HTTP_204_NO_CONTENT)
 
 
-@api_view(['GET'])
-def plant_type_list_published(request):
-    # GET all published plant_types
-    plant_type = PlantType.objects.filter(published=True)
-
-    if request.method == 'GET':
-        plant_type_serializer = PlantTypeSerializer(plant_type, many=True)
+@api_view(['POST'])
+def plant_type_list_name(request):
+    # GET all published plant_types    
+    plant_type = PlantType.objects.filter(plant_type_name__icontains=JSONParser().parse(request)['plant_type_name'])
+    if request.method == 'POST':
+        plant_type_serializer = PlantTypeSerializer(
+            plant_type, many=True)
         return JsonResponse(plant_type_serializer.data, safe=False)
 
 #
@@ -380,7 +388,7 @@ def plant_type_list_published(request):
 def plant_list(request):
     # GET list of plants, POST a new plant, DELETE all plants
     if request.method == 'GET':
-        plant = AmbientData.objects.all()
+        plant = Plant.objects.all()
 
         plant_id = request.GET.get('id', None)
         if plant_id is not None:
@@ -436,4 +444,13 @@ def plant_list_published(request):
 
     if request.method == 'GET':
         plant_serializer = PlantSerializer(plant, many=True)
+        return JsonResponse(plant_serializer.data, safe=False)
+
+@api_view(['POST'])
+def plant_list_name(request):
+    # GET all published plants    
+    plant = Plant.objects.filter(plant_name__icontains=JSONParser().parse(request)['plant_name'])
+    if request.method == 'POST':
+        plant_serializer = PlantSerializer(
+            plant, many=True)
         return JsonResponse(plant_serializer.data, safe=False)

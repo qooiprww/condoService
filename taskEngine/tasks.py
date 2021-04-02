@@ -2,6 +2,7 @@ from farm.models import Plant
 from farm.models import Task
 from farm.models import PlantData
 from farm.models import PlantType
+from farm.models import SeedContainer
 from farm.models import AmbientData
 from django.conf import settings
 from datetime import datetime
@@ -10,6 +11,7 @@ from celery import shared_task
 from celery import app
 import paho.mqtt.client as mqtt
 import json
+from farm.farmSerializer import TaskSerializer
 
 taskQueue = deque()
 
@@ -18,19 +20,21 @@ taskQueue = deque()
 def dataGatheringTask():
     allPlants = Plant.objects.filter(
         harvested='false', planted='true').order_by('degree', 'radius')
-    task_serializer = PlantDataSerializer(
+    task_serializer = TaskSerializer(
         data={'task_type': settings.TASK_AMBIENT_DATA_GATHERING,  'task_status': settings.TASK_STATUS_QUEUED})
 
     offerTask(task_serializer)
     for plant in allPlants:
-        task_serializer = PlantDataSerializer(
+        task_serializer = TaskSerializer(
             data={'plant_id': plant.id, 'task_type': settings.TASK_PLANT_DATA_GATHERING, 'task_status': settings.TASK_STATUS_QUEUED})
         offerTask(task_serializer)
 
 
 @shared_task
 def offerTask(task_serializer):
-    task_serializer.save()
+    if task_serializer.is_valid():
+        task_serializer.save()
+        print(task_serializer.is_valid())
     print(taskQueue)
     if not taskQueue:
         taskQueue.append(task_serializer.data['id'])
@@ -50,16 +54,16 @@ def taskHandler():
 
     if task.task_type == settings.TASK_WATERING:
         plant = Plant.objects.get(id=task.plant_id)
-        plant_type = Plant.objects.get(plant_type=plant.plant_type_id)
+        plant_type = PlantType.objects.get(id=plant.plant_type_id)
         wateringTask(task, plant.degree, plant.radius, plant.level,
                      plant_type.desired_humidity)
 
     elif task.task_type == settings.TASK_SEEDING:
         plant = Plant.objects.get(id=task.plant_id)
-        plant_type = Plant.objects.get(id=plant.plant_type_id)
-        seed_container = Plant.objects.get(id=plant.seed_container_id)
+        plant_type = PlantType.objects.get(id=plant.plant_type_id)
+        seed_container = SeedContainer.objects.get(id=plant_type.seed_container_id)
         seedingTask(task, plant.degree, plant.radius, plant.level,
-                    seed_container.degree, seed_container.radius, seed_container.level)
+                    seed_container.seed_container_degree, seed_container.seed_container_radius, seed_container.seed_container_level)
 
     elif task.task_type == settings.TASK_PLANT_DATA_GATHERING:
         plant = Plant.objects.get(id=task.plant_id)
@@ -178,12 +182,12 @@ def handleResponse(client, userdata, msg):
             task.task_status = settings.TASK_STATUS_FINISHED
             task.save()
             PlantData.objects.create(
-                plant=task.plant_id, humidity=data['humidity'])
+                plant=task.plant, humidity=data['humidity'])
             plant = Plant.objects.get(id=task.plant_id)
-            plant_type = Plant.objects.get(id=plant.plant_type_id)
-            if data['humidity'] + settings.WATERING_TASK_THRESHOLD < plant_type.desired_humidity:
-                task_serializer = PlantDataSerializer(
-                    data={'plant_id': plant.id, 'task_type': settings.TASK_WATERING, 'task_status': settings.TASK_STATUS_QUEUED})
+            plant_type = PlantType.objects.get(id=plant.plant_type_id)
+            if int(data['humidity']) + settings.WATERING_TASK_THRESHOLD < plant_type.desired_humidity:
+                task_serializer = TaskSerializer(
+                    data={'plant': plant.id, 'task_type': settings.TASK_WATERING, 'task_status': settings.TASK_STATUS_QUEUED})
                 offerTask(task_serializer)
         else:
             task.task_status = settings.TASK_STATUS_FAILED
