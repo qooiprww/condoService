@@ -44,11 +44,11 @@ INSTALLED_APPS = [
     'corsheaders',
 ]
 
-REDIS_PASSWORD = '0fyxpYTPskTAPSdTN70lSAomQWFapGGJ'
+REDIS_PASSWORD = 'XXX'
 
-REDIS_HOST = 'redis-13854.c244.us-east-1-2.ec2.cloud.redislabs.com:13854'
+REDIS_HOST = 'XXX'
 
-CELERY_BROKER_URL = 'redis://:0fyxpYTPskTAPSdTN70lSAomQWFapGGJ@redis-13854.c244.us-east-1-2.ec2.cloud.redislabs.com:13854'
+CELERY_BROKER_URL = 'XXX'
 
 MIDDLEWARE = [
     # CORS
@@ -91,7 +91,7 @@ DATABASES = {
         'ENGINE': 'djongo',
         'CLIENT': {
             'name': 'plantCondo',
-            'host': 'mongodb+srv://plantCondo:4dQpfflzcphYBXBh@haoran.rqlnx.mongodb.net/plantCondo?retryWrites=true&w=majority',
+            'host': 'XXX',
             'username': 'plantCondo',
             'password': '4dQpfflzcphYBXBh',
             'authMechanism': 'SCRAM-SHA-1',
