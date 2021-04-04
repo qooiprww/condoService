@@ -17,7 +17,7 @@ app.conf.update(
     task_serializer='json',
     result_serializer='json',
     result_expires=3600,
-    timezone='EDT',
+    timezone='US/Eastern',
     beat_schedule={
         'dataGatheringTask': {
             'task': 'taskEngine.tasks.dataGatheringTask',
